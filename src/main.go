@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	_ "embed"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +13,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/creack/pty"
+	"github.com/gorilla/websocket"
 )
 
 //go:embed index.html
@@ -31,9 +35,16 @@ type RunResponse struct {
 
 var port = envInt("PORT", 8080)
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  4096,
+	WriteBufferSize: 4096,
+	CheckOrigin:     func(r *http.Request) bool { return true },
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/run", handleRun)
+	mux.HandleFunc("/ws", handleWS)
 	mux.HandleFunc("/health", handleHealth)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -49,11 +60,9 @@ func main() {
 	log.Printf("Starting Rux Playground backend on %s", addr)
 
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      withCORS(mux),
-		ReadTimeout:  35 * time.Second,
-		WriteTimeout: 35 * time.Second,
-		IdleTimeout:  30 * time.Second,
+		Addr:        addr,
+		Handler:     withCORS(mux),
+		IdleTimeout: 60 * time.Second,
 	}
 
 	if err := srv.ListenAndServe(); err != nil {
@@ -145,6 +154,82 @@ func runCode(code string) RunResponse {
 	}
 
 	return resp
+}
+
+func handleWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WS upgrade: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	_, code, err := conn.ReadMessage()
+	if err != nil {
+		return
+	}
+
+	tmpDir, err := os.MkdirTemp("", "rux-play-*")
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, []byte("Error: "+err.Error()))
+		return
+	}
+	defer os.RemoveAll(tmpDir)
+	os.Chmod(tmpDir, 0755)
+
+	os.WriteFile(filepath.Join(tmpDir, "Main.rux"), code, 0644)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-i", "--tty",
+		"--memory=128m",
+		"--cpus=0.5",
+		"--security-opt=no-new-privileges",
+		"--cap-drop=ALL",
+		"--network=none",
+		"-v", tmpDir+":/workspace:ro",
+		"rux-playground-img",
+	)
+
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 30, Cols: 120})
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, []byte("Error: "+err.Error()))
+		return
+	}
+	defer f.Close()
+
+	done := make(chan struct{})
+
+	go func() {
+		io.Copy(wsWriter{conn}, f)
+		close(done)
+	}()
+
+	go func() {
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				f.Close()
+				return
+			}
+			f.Write(msg)
+		}
+	}()
+
+	<-done
+	cmd.Wait()
+}
+
+type wsWriter struct{ conn *websocket.Conn }
+
+func (w wsWriter) Write(p []byte) (int, error) {
+	err := w.conn.WriteMessage(websocket.BinaryMessage, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

@@ -20,7 +20,12 @@ fetch('https://rux-lang.dev/logo.svg')
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/selection/active-line.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/clike/clike.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <style>
 /* ── VitePress-faithful design tokens ──────────────────────────────── */
 :root {
@@ -222,8 +227,42 @@ body.theme-transitioning *::after {
 }
 /* override material-darker bg to match our exact bg */
 .dark .CodeMirror { background: #1b1b1f !important; }
-.cm-s-eclipse.CodeMirror { background: var(--vp-c-bg) !important; }
+.cm-s-eclipse.CodeMirror { background: var(--vp-c-bg) !important; color: rgba(32,30,26,0.90) !important; }
 .cm-s-eclipse .CodeMirror-gutters { background: var(--vp-c-bg-soft) !important; }
+
+/* ── Light-mode syntax highlighting ────────────────────────────── */
+/* keywords: func, return, import, if, else, for, while, etc. */
+.cm-s-eclipse .cm-keyword   { color: #6d28d9 !important; font-weight: 600; }
+/* built-in types: int, bool, float, void, string */
+.cm-s-eclipse .cm-builtin   { color: #0f766e !important; font-weight: 500; }
+/* string literals */
+.cm-s-eclipse .cm-string    { color: #b45309 !important; }
+.cm-s-eclipse .cm-string-2  { color: #b45309 !important; }
+/* numeric literals */
+.cm-s-eclipse .cm-number    { color: #c2410c !important; }
+/* comments */
+.cm-s-eclipse .cm-comment   { color: #78716c !important; font-style: italic; }
+/* function / method names */
+.cm-s-eclipse .cm-def       { color: #1d4ed8 !important; font-weight: 600; }
+/* variables & identifiers */
+.cm-s-eclipse .cm-variable  { color: rgba(32,30,26,0.90) !important; }
+.cm-s-eclipse .cm-variable-2{ color: #0369a1 !important; }
+.cm-s-eclipse .cm-variable-3{ color: #0f766e !important; }
+/* operators */
+.cm-s-eclipse .cm-operator  { color: #6d28d9 !important; }
+/* punctuation / meta */
+.cm-s-eclipse .cm-punctuation { color: #57534e !important; }
+.cm-s-eclipse .cm-meta      { color: #57534e !important; }
+/* type annotations */
+.cm-s-eclipse .cm-type      { color: #0f766e !important; font-weight: 500; }
+/* attributes / decorators */
+.cm-s-eclipse .cm-attribute { color: #7c3aed !important; }
+/* preprocessor */
+.cm-s-eclipse .cm-qualifier { color: #0369a1 !important; }
+/* error tokens */
+.cm-s-eclipse .cm-error     { color: #b91c1c !important; background: rgba(185,28,28,0.08) !important; }
+/* active line highlight */
+.cm-s-eclipse .CodeMirror-activeline-background { background: rgba(109,40,217,0.05) !important; }
 .CodeMirror-gutters {
   background: var(--vp-c-bg-soft) !important;
   border-right: 1px solid var(--vp-c-divider) !important;
@@ -254,6 +293,7 @@ body.theme-transitioning *::after {
 .vp-output.idle   { color: var(--vp-c-text-3); font-style: italic; }
 .vp-output.running { color: var(--vp-c-text-2); }
 .vp-output.success { color: var(--vp-c-text-1); }
+.dark .vp-output.success { color: #c4b5fd; }
 .vp-output.error  { color: var(--vp-c-danger); }
 
 /* status indicator */
@@ -467,6 +507,10 @@ body.theme-transitioning *::after {
       <span class="vp-pane-label">Source</span>
       <div class="vp-pane-spacer"></div>
       <span class="vp-pane-label" id="langLabel" style="letter-spacing:0.03em;">rux</span>
+      <button class="vp-btn vp-btn-ghost" id="interactiveBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 9 12 4 7"/><path d="M12 19h8"/></svg>
+        Interactive
+      </button>
       <button class="vp-btn vp-btn-brand" id="runBtn">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         Run
@@ -504,8 +548,9 @@ func Main() -> int {
         </svg>
       </button>
     </div>
-    <div class="vp-output-scroll">
+    <div class="vp-output-scroll" id="outputScroll">
       <div class="vp-output idle" id="output">Run some Rux code to see output here.</div>
+      <div id="terminalContainer" style="display:none;height:100%"></div>
     </div>
   </div>
 
@@ -518,6 +563,31 @@ const themeBtn   = document.getElementById('themeBtn');
 const sunIcon    = document.getElementById('themeIconSun');
 const moonIcon   = document.getElementById('themeIconMoon');
 
+function termTheme() {
+  return {
+    background: isDark ? '#1b1b1f' : '#f2f0eb',
+    foreground: isDark ? '#c4b5fd' : 'rgba(32,30,26,0.90)',
+    cursor: isDark ? '#a78bfa' : '#6d28d9',
+    selectionBackground: isDark ? 'rgba(167,139,250,0.14)' : 'rgba(109,40,217,0.10)',
+    black: '#2e2e33',
+    red: isDark ? '#f87171' : '#b91c1c',
+    green: isDark ? '#4ade80' : '#15803d',
+    yellow: '#fbbf24',
+    blue: '#818cf8',
+    magenta: '#c084fc',
+    cyan: '#22d3ee',
+    white: isDark ? 'rgba(255,255,245,0.86)' : 'rgba(32,30,26,0.90)',
+    brightBlack: '#4a4a52',
+    brightRed: isDark ? '#fca5a5' : '#ef4444',
+    brightGreen: isDark ? '#86efac' : '#22c55e',
+    brightYellow: '#fde68a',
+    brightBlue: '#a5b4fc',
+    brightMagenta: '#d8b4fe',
+    brightCyan: '#67e8f9',
+    brightWhite: isDark ? '#c4b5fd' : 'rgba(32,30,26,0.90)',
+  };
+}
+
 themeBtn.addEventListener('click', () => {
   document.body.classList.add('theme-transitioning');
   isDark = !isDark;
@@ -525,6 +595,27 @@ themeBtn.addEventListener('click', () => {
   editor.setOption('theme', isDark ? 'material-darker' : 'eclipse');
   sunIcon.style.display  = isDark ? 'none' : '';
   moonIcon.style.display = isDark ? ''     : 'none';
+  if (currentTerm) {
+    const buf = [];
+    for (let i = 0; i < currentTerm.buffer.active.length; i++) {
+      const l = currentTerm.buffer.active.getLine(i);
+      if (l) buf.push(l.translateToString());
+    }
+    currentTerm.dispose();
+    const tc = document.getElementById('terminalContainer');
+    tc.innerHTML = '';
+    const t = new Terminal({ cursorBlink: true, cursorStyle: 'block', fontSize: 13, fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--vp-font-family-mono').trim(), theme: termTheme(), allowTransparency: true });
+    const f = new FitAddon.FitAddon();
+    t.loadAddon(f);
+    t.open(tc);
+    f.fit();
+    t.write(buf.join('\r\n') + '\r\n');
+    currentTerm = t;
+    currentFit = f;
+    if (currentSocket) {
+      t.onData((data) => { if (currentSocket && currentSocket.readyState === WebSocket.OPEN) currentSocket.send(data); });
+    }
+  }
   setTimeout(() => document.body.classList.remove('theme-transitioning'), 400);
 });
 
@@ -538,27 +629,68 @@ const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
   indentWithTabs: false,
   matchBrackets: true,
   autoCloseBrackets: true,
+  styleActiveLine: true,
   extraKeys: { 'Ctrl-Enter': runCode, 'Cmd-Enter': runCode }
 });
 
-/* ── output helpers ─────────────────────────────────────────────── */
+/* ── helpers ──────────────────────────────────────────────────────── */
+const outputEl = document.getElementById('output');
+const termContainer = document.getElementById('terminalContainer');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const durationBadge = document.getElementById('durationBadge');
+
 function setOutput(text, state) {
-  const el = document.getElementById('output');
-  el.textContent = text;
-  el.className = 'vp-output ' + state;
+  outputEl.textContent = text;
+  outputEl.className = 'vp-output ' + state;
 }
 function setStatus(label, state) {
-  document.getElementById('statusDot').className = 'vp-status-dot ' + state;
-  document.getElementById('statusText').textContent = label;
+  statusDot.className = 'vp-status-dot ' + state;
+  statusText.textContent = label;
 }
 function setDuration(ms) {
-  const b = document.getElementById('durationBadge');
-  if (ms !== null) { b.style.display = ''; b.textContent = ms + 'ms'; }
-  else b.style.display = 'none';
+  if (ms !== null) { durationBadge.style.display = ''; durationBadge.textContent = ms + 'ms'; }
+  else durationBadge.style.display = 'none';
 }
 
-/* ── run ────────────────────────────────────────────────────────── */
+function showMode(mode) {
+  if (mode === 'output') {
+    outputEl.style.display = '';
+    termContainer.style.display = 'none';
+  } else {
+    outputEl.style.display = 'none';
+    termContainer.style.display = '';
+  }
+}
+
+/* ── terminal helpers ────────────────────────────────────────────── */
+function initTerm() {
+  termContainer.innerHTML = '';
+  const term = new Terminal({
+    cursorBlink: true,
+    cursorStyle: 'block',
+    fontSize: 13,
+    fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--vp-font-family-mono').trim(),
+    theme: termTheme(),
+    allowTransparency: true,
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(termContainer);
+  fit.fit();
+  return { term, fit };
+}
+
+let currentTerm = null;
+let currentFit = null;
+let currentSocket = null;
+
+/* ── run (fast HTTP POST) ────────────────────────────────────────── */
 async function runCode() {
+  if (currentSocket) { currentSocket.close(); currentSocket = null; }
+  if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
+  showMode('output');
+
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
   setOutput('Running\u2026', 'running');
@@ -592,17 +724,97 @@ async function runCode() {
   btn.disabled = false;
 }
 
+/* ── run interactive (WebSocket + PTY) ───────────────────────────── */
+async function runInteractive() {
+  if (currentSocket) { currentSocket.close(); currentSocket = null; }
+  if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
+  showMode('terminal');
+
+  const btn = document.getElementById('interactiveBtn');
+  btn.disabled = true;
+
+  const { term, fit } = initTerm();
+  currentTerm = term;
+  currentFit = fit;
+
+  setStatus('Running', 'running');
+  setDuration(null);
+  const startTime = performance.now();
+
+  try {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const sock = new WebSocket(proto + '//' + location.host + '/ws');
+    currentSocket = sock;
+
+    sock.onopen = () => sock.send(editor.getValue());
+
+    sock.onmessage = (ev) => {
+      if (ev.data instanceof Blob) {
+        ev.data.arrayBuffer().then(buf => term.write(new Uint8Array(buf)));
+      } else {
+        term.write(ev.data);
+      }
+    };
+
+    sock.onclose = () => {
+      const ms = Math.round(performance.now() - startTime);
+      term.write('\r\n\x1b[32m[Done \u2014 ' + ms + 'ms]\x1b[0m\r\n');
+      setStatus('Success', 'success');
+      setDuration(ms);
+      currentSocket = null;
+      btn.disabled = false;
+    };
+
+    sock.onerror = () => {
+      term.write('\r\n\x1b[31m[Connection error]\x1b[0m\r\n');
+    };
+
+    term.onData((data) => {
+      if (sock && sock.readyState === WebSocket.OPEN) {
+        sock.send(data);
+      }
+    });
+
+    const ro = new ResizeObserver(() => { if (currentFit) currentFit.fit(); });
+    ro.observe(termContainer);
+    term._ro = ro;
+
+  } catch (err) {
+    term.write('\r\n\x1b[31mFailed: ' + err.message + '\x1b[0m\r\n');
+    btn.disabled = false;
+  }
+}
+
 document.getElementById('runBtn').addEventListener('click', runCode);
+document.getElementById('interactiveBtn').addEventListener('click', runInteractive);
 
 document.getElementById('copyBtn').addEventListener('click', () => {
-  navigator.clipboard.writeText(document.getElementById('output').textContent);
+  if (outputEl.style.display !== 'none') {
+    navigator.clipboard.writeText(outputEl.textContent);
+  } else if (currentTerm) {
+    const sel = currentTerm.getSelection();
+    if (sel) { navigator.clipboard.writeText(sel); return; }
+    let buf = '';
+    for (let i = 0; i < currentTerm.buffer.active.length; i++) {
+      const l = currentTerm.buffer.active.getLine(i);
+      if (l) buf += l.translateToString() + '\n';
+    }
+    navigator.clipboard.writeText(buf.trimEnd());
+  }
 });
 
 document.getElementById('clearBtn').addEventListener('click', () => {
-  setOutput('Run some Rux code to see output here.', 'idle');
+  if (currentSocket) { currentSocket.close(); currentSocket = null; }
+  if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
+  termContainer.innerHTML = '';
+  outputEl.textContent = 'Run some Rux code to see output here.';
+  outputEl.className = 'vp-output idle';
+  showMode('output');
   setStatus('Ready', '');
   setDuration(null);
 });
+
+window.addEventListener('resize', () => { if (currentFit) currentFit.fit(); });
 
 /* ── resize ─────────────────────────────────────────────────────── */
 const handle = document.getElementById('resizeHandle');

@@ -20,7 +20,7 @@ cp /workspace/Main.rux Src/
 
 rux install >/dev/null 2>&1 || true
 
-if ! rux build 2>/tmp/rux_err; then
+if ! rux build >/dev/null 2>/tmp/rux_err; then
     cat /tmp/rux_err >&2
     exit 1
 fi
