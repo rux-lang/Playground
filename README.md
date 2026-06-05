@@ -1,6 +1,6 @@
 # Rux Playground Setup
 
-Deployment files for the [Rux Language Playground](https://rux-lang.dev/playground) — a sandboxed web-based compiler running on Debian 12 with Docker and Cloudflare Tunnel.
+Deployment files for the [Rux Language Playground](https://rux-lang.dev/playground) — a sandboxed in-browser playground for the Rux compiler, running on Debian 12 with Docker and Cloudflare Tunnel.
 
 [Alternate Playground URL](https://ruxplayground.dpdns.org)
 ## Files
