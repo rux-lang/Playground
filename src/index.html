@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Playground | Rux</title>
+<script>
+fetch('https://rux-lang.dev/logo.svg')
+  .then(r => r.blob())
+  .then(b => {
+    const url = URL.createObjectURL(b);
+    const link = document.createElement('link');
+    link.rel = 'icon'; link.type = 'image/svg+xml'; link.href = url;
+    document.head.appendChild(link);
+  }).catch(() => {});
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/mode/clike/clike.min.js"></script>
+<style>
+/* ── VitePress-faithful design tokens ──────────────────────────────── */
+:root {
+  --vp-font-family-base: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+
+  /* Light — warm stone/parchment */
+  --vp-c-bg:          #f2f0eb;
+  --vp-c-bg-soft:     #e8e5de;
+  --vp-c-bg-elv:      #f7f5f0;
+  --vp-c-divider:     #d8d4cc;
+  --vp-c-text-1:      rgba(32,30,26,0.90);
+  --vp-c-text-2:      rgba(32,30,26,0.58);
+  --vp-c-text-3:      rgba(32,30,26,0.32);
+  --vp-c-brand-1:     #6d28d9;
+  --vp-c-brand-2:     #7c3aed;
+  --vp-c-brand-soft:  rgba(109,40,217,0.10);
+  --vp-c-success:     #15803d;
+  --vp-c-danger:      #b91c1c;
+  --vp-nav-height:    64px;
+  --vp-sidebar-width: 0px;
+}
+
+.dark {
+  --vp-c-bg:          #1b1b1f;
+  --vp-c-bg-soft:     #252529;
+  --vp-c-bg-elv:      #2f2f33;
+  --vp-c-divider:     #3c3c43;
+  --vp-c-text-1:      rgba(255,255,245,0.86);
+  --vp-c-text-2:      rgba(235,235,245,0.60);
+  --vp-c-text-3:      rgba(235,235,245,0.38);
+  --vp-c-brand-1:     #a78bfa;
+  --vp-c-brand-2:     #c4b5fd;
+  --vp-c-brand-soft:  rgba(167,139,250,0.14);
+  --vp-c-success:     #4ade80;
+  --vp-c-danger:      #f87171;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--vp-font-family-base);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* smooth theme transition */
+body.theme-transitioning,
+body.theme-transitioning *,
+body.theme-transitioning *::before,
+body.theme-transitioning *::after {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.25s ease !important;
+}
+
+/* ── Nav ─────────────────────────────────────────────────────────── */
+.vp-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--vp-nav-height);
+  background: var(--vp-c-bg);
+  border-bottom: 1px solid var(--vp-c-divider);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 0;
+  flex-shrink: 0;
+}
+.vp-nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--vp-c-text-1);
+}
+.vp-nav-logo img { width: 24px; height: 24px; flex-shrink: 0; }
+.vp-nav-logo-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-text-1);
+}
+.vp-nav-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--vp-c-divider);
+  margin: 0 16px;
+  flex-shrink: 0;
+}
+.vp-nav-title {
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+  font-weight: 500;
+}
+.vp-nav-spacer { flex: 1; }
+.vp-nav-actions { display: flex; align-items: center; gap: 8px; }
+
+/* nav buttons */
+.vp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--vp-font-family-base);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-decoration: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+.vp-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--vp-c-divider);
+  color: var(--vp-c-text-2);
+}
+.vp-btn-ghost:hover {
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+  border-color: var(--vp-c-text-3);
+}
+.vp-btn-brand {
+  background: var(--vp-c-brand-1);
+  border: 1px solid transparent;
+  color: #fff;
+}
+.dark .vp-btn-brand { color: #1b1b1f; }
+.vp-btn-brand:hover { opacity: 0.88; }
+.vp-btn-brand:active { opacity: 0.76; }
+.vp-btn-brand:disabled {
+  background: var(--vp-c-bg-soft);
+  border-color: var(--vp-c-divider);
+  color: var(--vp-c-text-3);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.vp-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* ── Workspace ───────────────────────────────────────────────────── */
+.vp-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.vp-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.vp-pane + .vp-pane { border-left: 1px solid var(--vp-c-divider); }
+
+/* pane header bar */
+.vp-pane-header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 10px;
+  background: var(--vp-c-bg-soft);
+  border-bottom: 1px solid var(--vp-c-divider);
+  flex-shrink: 0;
+}
+.vp-pane-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vp-c-text-3);
+  user-select: none;
+}
+.vp-pane-spacer { flex: 1; }
+
+/* ── Editor ──────────────────────────────────────────────────────── */
+.vp-editor-wrap { flex: 1; overflow: hidden; }
+.CodeMirror {
+  height: 100% !important;
+  font-size: 13.5px !important;
+  line-height: 1.7 !important;
+  font-family: var(--vp-font-family-mono) !important;
+  background: var(--vp-c-bg) !important;
+  color: var(--vp-c-text-1) !important;
+}
+.dark .CodeMirror {
+  background: var(--vp-c-bg) !important;
+}
+/* override material-darker bg to match our exact bg */
+.dark .CodeMirror { background: #1b1b1f !important; }
+.cm-s-eclipse.CodeMirror { background: var(--vp-c-bg) !important; }
+.cm-s-eclipse .CodeMirror-gutters { background: var(--vp-c-bg-soft) !important; }
+.CodeMirror-gutters {
+  background: var(--vp-c-bg-soft) !important;
+  border-right: 1px solid var(--vp-c-divider) !important;
+  min-width: 44px;
+}
+.CodeMirror-linenumber {
+  color: var(--vp-c-text-3) !important;
+  padding: 0 10px 0 6px !important;
+  font-size: 12px;
+}
+.CodeMirror-cursor { border-left: 2px solid var(--vp-c-brand-1) !important; }
+.CodeMirror-selected { background: var(--vp-c-brand-soft) !important; }
+.CodeMirror-scroll { overflow: auto !important; height: 100%; }
+
+/* ── Output ──────────────────────────────────────────────────────── */
+.vp-output-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+}
+.vp-output {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.vp-output.idle   { color: var(--vp-c-text-3); font-style: italic; }
+.vp-output.running { color: var(--vp-c-text-2); }
+.vp-output.success { color: var(--vp-c-text-1); }
+.vp-output.error  { color: var(--vp-c-danger); }
+
+/* status indicator */
+.vp-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  font-weight: 500;
+}
+.vp-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--vp-c-text-3);
+  flex-shrink: 0;
+}
+.vp-status-dot.running {
+  background: var(--vp-c-brand-1);
+  animation: vp-pulse 1s ease-in-out infinite;
+}
+.vp-status-dot.success { background: var(--vp-c-success); }
+.vp-status-dot.error   { background: var(--vp-c-danger); }
+@keyframes vp-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* duration badge */
+.vp-duration {
+  font-size: 11px;
+  font-family: var(--vp-font-family-mono);
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+
+/* kbd hint */
+.vp-kbd {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-3);
+  font-family: var(--vp-font-family-mono);
+  line-height: 1.5;
+}
+
+/* resize handle */
+.vp-resize {
+  width: 1px;
+  background: var(--vp-c-divider);
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.15s, width 0.1s;
+  position: relative;
+  z-index: 5;
+}
+.vp-resize::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+.vp-resize:hover { background: var(--vp-c-brand-1); width: 2px; }
+
+/* icon-only button */
+.vp-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--vp-c-text-3);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.vp-icon-btn:hover {
+  background: var(--vp-c-bg-elv);
+  border-color: var(--vp-c-divider);
+  color: var(--vp-c-text-1);
+}
+.vp-icon-btn svg { width: 15px; height: 15px; }
+
+.vp-btn { height: 28px; padding: 0 12px; font-size: 13px; }
+
+/* ── theme pill toggle ───────────────────────────────────────────── */
+.vp-theme-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  font-family: var(--vp-font-family-base);
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.vp-theme-pill:hover { border-color: var(--vp-c-text-3); }
+.vp-pill-track {
+  width: 26px; height: 14px;
+  border-radius: 99px;
+  background: var(--vp-c-divider);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.dark .vp-pill-track { background: var(--vp-c-brand-1); }
+.vp-pill-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.dark .vp-pill-thumb { transform: translateX(12px); }
+
+/* ── social icons ───────────────────────────────────────────────── */
+.vp-socials {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.vp-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  color: var(--vp-c-text-3);
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.vp-social:hover {
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+}
+.vp-social svg { width: 15px; height: 15px; }
+
+@media (max-width: 768px) {
+  .vp-workspace { flex-direction: column; }
+  .vp-pane + .vp-pane { border-left: none; border-top: 1px solid var(--vp-c-divider); }
+  .vp-resize { display: none; }
+  .vp-kbd { display: none; }
+  .vp-nav { padding: 0 16px; }
+}
+</style>
+</head>
+<body class="dark">
+
+<nav class="vp-nav">
+  <a class="vp-nav-logo" href="https://rux-lang.dev" target="_blank">
+    <img src="https://rux-lang.dev/logo.svg" alt="Rux">
+    <span class="vp-nav-logo-name">Rux</span>
+  </a>
+  <div class="vp-nav-sep"></div>
+  <span class="vp-nav-title">Playground</span>
+  <div class="vp-nav-spacer"></div>
+  <div class="vp-nav-actions">
+    <!-- theme toggle pill -->
+    <button class="vp-theme-pill" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">
+      <svg id="themeIconSun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg id="themeIconMoon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <span class="vp-pill-track"><span class="vp-pill-thumb" id="pillThumb"></span></span>
+    </button>
+    <!-- social icons -->
+    <div class="vp-socials">
+      <a class="vp-social" href="https://github.com/rux-lang/rux" target="_blank" title="GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.23c-3.34.73-4.04-1.42-4.04-1.42-.54-1.39-1.33-1.76-1.33-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.01 2.05.14 3 .4 2.29-1.55 3.3-1.23 3.3-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.8 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.21.7.82.58C20.57 21.8 24 17.3 24 12 24 5.37 18.63 0 12 0z"/></svg>
+      </a>
+      <a class="vp-social" href="https://github.com/rux-lang/Rux/discussions" target="_blank" title="GitHub Discussions">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M 19.2 1.2 c 2.65 0 4.8 2.15 4.8 4.8 v 9.6 c 0 2.65 -2.15 4.8 -4.8 4.8 h -3.1 l -3.25 3.25 c -0.43 0.43 -1.11 0.47 -1.58 0.1 l -0.11 -0.1 l -3.25 -3.25 h -3.1 c -2.56 0 -4.67 -2.01 -4.79 -4.56 v -0.24 s 0 -9.6 0 -9.6 C 0 3.35 2.15 1.2 4.8 1.2 h 14.4 Z M 14.4 12 h -7.2 c -0.66 0 -1.2 0.54 -1.2 1.2 s 0.54 1.2 1.2 1.2 h 7.2 c 0.66 0 1.2 -0.54 1.2 -1.2 s -0.54 -1.2 -1.2 -1.2 M 16.8 7.2 H 7.2 c -0.66 0 -1.2 0.54 -1.2 1.2 s 0.54 1.2 1.2 1.2 h 9.6 c 0.66 0 1.2 -0.54 1.2 -1.2 s -0.54 -1.2 -1.2 -1.2"/></svg>
+      </a>
+      <a class="vp-social" href="https://discord.com/invite/uvSHjtZSVG" target="_blank" title="Discord">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.032.054a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+      </a>
+      <a class="vp-social" href="https://www.reddit.com/r/ruxlang" target="_blank" title="Reddit">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+      </a>
+      <a class="vp-social" href="https://www.youtube.com/@ruxlang" target="_blank" title="YouTube">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      </a>
+      <a class="vp-social" href="https://x.com/ruxlang" target="_blank" title="X / Twitter">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+      </a>
+      <a class="vp-social" href="https://bsky.app/profile/ruxlang.bsky.social" target="_blank" title="Bluesky">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.204-.659-.299-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/></svg>
+      </a>
+      <a class="vp-social" href="https://mastodon.social/@ruxlang" target="_blank" title="Mastodon">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z"/></svg>
+      </a>
+      <a class="vp-social" href="https://t.me/ruxlang" target="_blank" title="Telegram">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="vp-workspace" id="workspace">
+
+  <div class="vp-pane" id="editorPane" style="flex: 58 1 0">
+    <div class="vp-pane-header">
+      <span class="vp-pane-label">Source</span>
+      <div class="vp-pane-spacer"></div>
+      <span class="vp-pane-label" id="langLabel" style="letter-spacing:0.03em;">rux</span>
+      <button class="vp-btn vp-btn-brand" id="runBtn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Run
+      </button>
+    </div>
+    <div class="vp-editor-wrap">
+      <textarea id="editor">import Std::Io::Print;
+
+func Main() -> int {
+    Print("Hello, Rux!\n");
+    return 0;
+}</textarea>
+    </div>
+  </div>
+
+  <div class="vp-resize" id="resizeHandle"></div>
+
+  <div class="vp-pane" id="outputPane" style="flex: 42 1 0">
+    <div class="vp-pane-header">
+      <div class="vp-status" id="status">
+        <div class="vp-status-dot" id="statusDot"></div>
+        <span id="statusText">Ready</span>
+      </div>
+      <div class="vp-pane-spacer"></div>
+      <span class="vp-duration" id="durationBadge" style="display:none"></span>
+      <button class="vp-icon-btn" id="copyBtn" title="Copy output">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+      </button>
+      <button class="vp-icon-btn" id="clearBtn" title="Clear output">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+    </div>
+    <div class="vp-output-scroll">
+      <div class="vp-output idle" id="output">Run some Rux code to see output here.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── theme ─────────────────────────────────────────────────────── */
+let isDark = true;
+const themeBtn   = document.getElementById('themeBtn');
+const sunIcon    = document.getElementById('themeIconSun');
+const moonIcon   = document.getElementById('themeIconMoon');
+
+themeBtn.addEventListener('click', () => {
+  document.body.classList.add('theme-transitioning');
+  isDark = !isDark;
+  document.body.classList.toggle('dark', isDark);
+  editor.setOption('theme', isDark ? 'material-darker' : 'eclipse');
+  sunIcon.style.display  = isDark ? 'none' : '';
+  moonIcon.style.display = isDark ? ''     : 'none';
+  setTimeout(() => document.body.classList.remove('theme-transitioning'), 400);
+});
+
+/* ── editor ─────────────────────────────────────────────────────── */
+const editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+  lineNumbers: true,
+  mode: 'text/x-csrc',
+  theme: 'material-darker',
+  indentUnit: 4,
+  tabSize: 4,
+  indentWithTabs: false,
+  matchBrackets: true,
+  autoCloseBrackets: true,
+  extraKeys: { 'Ctrl-Enter': runCode, 'Cmd-Enter': runCode }
+});
+
+/* ── output helpers ─────────────────────────────────────────────── */
+function setOutput(text, state) {
+  const el = document.getElementById('output');
+  el.textContent = text;
+  el.className = 'vp-output ' + state;
+}
+function setStatus(label, state) {
+  document.getElementById('statusDot').className = 'vp-status-dot ' + state;
+  document.getElementById('statusText').textContent = label;
+}
+function setDuration(ms) {
+  const b = document.getElementById('durationBadge');
+  if (ms !== null) { b.style.display = ''; b.textContent = ms + 'ms'; }
+  else b.style.display = 'none';
+}
+
+/* ── run ────────────────────────────────────────────────────────── */
+async function runCode() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  setOutput('Running\u2026', 'running');
+  setStatus('Running', 'running');
+  setDuration(null);
+
+  try {
+    const res = await fetch('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: editor.getValue() })
+    });
+    const data = await res.json();
+    let out = '';
+    if (data.stderr) out += data.stderr.trim() + '\n';
+    if (data.stdout) out += data.stdout;
+
+    if (data.success) {
+      setOutput(out.trim() || '(no output)', 'success');
+      setStatus('Success', 'success');
+      setDuration(data.duration_ms);
+    } else {
+      setOutput((data.error || '') + (out ? '\n' + out : ''), 'error');
+      setStatus('Error', 'error');
+      setDuration(data.duration_ms ?? null);
+    }
+  } catch (err) {
+    setOutput('Connection failed: ' + err.message, 'error');
+    setStatus('Connection error', 'error');
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('runBtn').addEventListener('click', runCode);
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(document.getElementById('output').textContent);
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  setOutput('Run some Rux code to see output here.', 'idle');
+  setStatus('Ready', '');
+  setDuration(null);
+});
+
+/* ── resize ─────────────────────────────────────────────────────── */
+const handle = document.getElementById('resizeHandle');
+const ws = document.getElementById('workspace');
+const ep = document.getElementById('editorPane');
+const op = document.getElementById('outputPane');
+let dragging = false, startX = 0, startRatio = 0;
+
+handle.addEventListener('mousedown', e => {
+  dragging = true;
+  startX = e.clientX;
+  startRatio = ep.getBoundingClientRect().width / ws.getBoundingClientRect().width;
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const total = ws.getBoundingClientRect().width;
+  const r = Math.max(0.2, Math.min(0.8, startRatio + (e.clientX - startX) / total));
+  ep.style.flex = (r * 100) + ' 1 0';
+  op.style.flex = ((1 - r) * 100) + ' 1 0';
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+[Unit]
+Description=Rux Language Playground Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+WorkingDirectory=__PREFIX__
+ExecStart=__PREFIX__/bin/backend
+Restart=on-failure
+RestartSec=5
+Environment=PORT=__PORT__
+Environment=TMPDIR=__PREFIX__/data/tmp
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

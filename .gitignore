@@ -1,0 +1,12 @@
+# Go
+go.sum
+backend
+*.exe
+
+# Temp files
+/tmp/
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
