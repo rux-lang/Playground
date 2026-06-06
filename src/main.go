@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/creack/pty"
@@ -33,6 +34,18 @@ type RunResponse struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
+type AsmResponse struct {
+	Stdout     string `json:"stdout"`
+	Stderr     string `json:"stderr"`
+	Success    bool   `json:"success"`
+	Error      string `json:"error,omitempty"`
+	DurationMs int64  `json:"duration_ms"`
+	AsmUser    string `json:"asm_user"`
+	AsmFull    string `json:"asm_full"`
+	TotalLines int    `json:"total_lines"`
+	UserLines  int    `json:"user_lines"`
+}
+
 var port = envInt("PORT", 8080)
 
 var upgrader = websocket.Upgrader{
@@ -44,6 +57,7 @@ var upgrader = websocket.Upgrader{
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/run", handleRun)
+	mux.HandleFunc("/asm", handleAsm)
 	mux.HandleFunc("/ws", handleWS)
 	mux.HandleFunc("/health", handleHealth)
 
@@ -220,6 +234,111 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 
 	<-done
 	cmd.Wait()
+}
+
+func handleAsm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req RunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, RunResponse{
+			Success: false, Error: "invalid JSON: " + err.Error(),
+		})
+		return
+	}
+
+	if req.Code == "" {
+		writeJSON(w, http.StatusBadRequest, RunResponse{
+			Success: false, Error: "code field is required",
+		})
+		return
+	}
+
+	tmpDir, err := os.MkdirTemp("", "rux-asm-*")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, RunResponse{
+			Success: false, Error: "failed to create temp dir: " + err.Error(),
+		})
+		return
+	}
+	os.Chmod(tmpDir, 0755)
+	defer os.RemoveAll(tmpDir)
+
+	os.WriteFile(filepath.Join(tmpDir, "Main.rux"), []byte(req.Code), 0644)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+		"-e", "DUMP_ASM=1",
+		"--memory=128m",
+		"--cpus=0.5",
+		"--security-opt=no-new-privileges",
+		"--cap-drop=ALL",
+		"--network=none",
+		"-v", tmpDir+":/workspace:ro",
+		"rux-playground-img",
+	)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	start := time.Now()
+	runErr := cmd.Run()
+	elapsed := time.Since(start)
+
+	asmUser, asmFull := parseDelimitedAssembly(stdout.String())
+
+	resp := AsmResponse{
+		Stdout:     stdout.String(),
+		Stderr:     stderr.String(),
+		DurationMs: elapsed.Milliseconds(),
+		AsmUser:    asmUser,
+		AsmFull:    asmFull,
+		TotalLines: len(strings.Split(asmFull, "\n")),
+		UserLines:  len(strings.Split(asmUser, "\n")),
+	}
+
+	if ctx.Err() == context.DeadlineExceeded {
+		resp.Success = false
+		resp.Error = "execution timed out (30s limit)"
+	} else if runErr != nil {
+		resp.Success = false
+		resp.Error = runErr.Error()
+	} else {
+		resp.Success = true
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func parseDelimitedAssembly(output string) (userPart, fullPart string) {
+	parts := strings.SplitN(output, "===USER_ASM_START===\n", 2)
+	if len(parts) < 2 {
+		return output, output
+	}
+	rest := parts[1]
+	userEnd := strings.Index(rest, "\n===USER_ASM_END===\n")
+	if userEnd < 0 {
+		return output, output
+	}
+	userPart = strings.TrimSpace(rest[:userEnd])
+	restAfterUser := rest[userEnd+len("\n===USER_ASM_END===\n"):]
+	fullStart := strings.Index(restAfterUser, "===FULL_ASM_START===\n")
+	if fullStart < 0 {
+		return output, output
+	}
+	fullBody := restAfterUser[fullStart+len("===FULL_ASM_START===\n"):]
+	fullEnd := strings.Index(fullBody, "\n===FULL_ASM_END===")
+	if fullEnd < 0 {
+		return output, output
+	}
+	fullPart = strings.TrimSpace(fullBody[:fullEnd])
+	return
 }
 
 type wsWriter struct{ conn *websocket.Conn }

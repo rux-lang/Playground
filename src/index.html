@@ -506,10 +506,17 @@ body.theme-transitioning *::after {
     <div class="vp-pane-header">
       <span class="vp-pane-label">Source</span>
       <div class="vp-pane-spacer"></div>
+      <button class="vp-icon-btn" id="downloadBtn" title="Download Main.rux" style="width:26px;height:26px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
       <span class="vp-pane-label" id="langLabel" style="letter-spacing:0.03em;">rux</span>
       <button class="vp-btn vp-btn-ghost" id="interactiveBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 9 12 4 7"/><path d="M12 19h8"/></svg>
         Interactive
+      </button>
+      <button class="vp-btn vp-btn-ghost" id="asmBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="12" y1="10" x2="12" y2="16"/></svg>
+        ASM
       </button>
       <button class="vp-btn vp-btn-brand" id="runBtn">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -535,6 +542,7 @@ func Main() -> int {
         <span id="statusText">Ready</span>
       </div>
       <div class="vp-pane-spacer"></div>
+      <button class="vp-btn vp-btn-ghost" id="asmToggleBtn" style="display:none;font-size:11px;padding:0 8px;height:26px;">Full Assembly</button>
       <span class="vp-duration" id="durationBadge" style="display:none"></span>
       <button class="vp-icon-btn" id="copyBtn" title="Copy output">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
@@ -690,6 +698,8 @@ async function runCode() {
   if (currentSocket) { currentSocket.close(); currentSocket = null; }
   if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
   showMode('output');
+  document.getElementById('asmToggleBtn').style.display = 'none';
+  window._asmData = null;
 
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
@@ -729,6 +739,8 @@ async function runInteractive() {
   if (currentSocket) { currentSocket.close(); currentSocket = null; }
   if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
   showMode('terminal');
+  document.getElementById('asmToggleBtn').style.display = 'none';
+  window._asmData = null;
 
   const btn = document.getElementById('interactiveBtn');
   btn.disabled = true;
@@ -788,6 +800,79 @@ async function runInteractive() {
 document.getElementById('runBtn').addEventListener('click', runCode);
 document.getElementById('interactiveBtn').addEventListener('click', runInteractive);
 
+async function dumpAsm() {
+  if (currentSocket) { currentSocket.close(); currentSocket = null; }
+  if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
+  showMode('output');
+
+  const btn = document.getElementById('asmBtn');
+  btn.disabled = true;
+  setOutput('Generating assembly\u2026', 'running');
+  setStatus('Running', 'running');
+  setDuration(null);
+  window._asmData = null;
+
+  try {
+    const res = await fetch('/asm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: editor.getValue() })
+    });
+    const data = await res.json();
+    window._asmData = data;
+
+    if (data.success) {
+      _showFullAsm = false;
+      const toggleBtn = document.getElementById('asmToggleBtn');
+      toggleBtn.style.display = '';
+      toggleBtn.textContent = 'Full Assembly';
+      let note = '';
+      if (data.total_lines && data.user_lines) {
+        note = `\n\n; Showing user code (${data.user_lines} lines). Full assembly: ${data.total_lines} lines total.`;
+      }
+      setOutput(data.asm_user.trim() + note, 'success');
+      setStatus('Success', 'success');
+      setDuration(data.duration_ms);
+    } else {
+      let out = '';
+      if (data.stderr) out += data.stderr.trim() + '\n';
+      if (data.stdout) out += data.stdout;
+      setOutput((data.error || '') + (out ? '\n' + out : ''), 'error');
+      setStatus('Error', 'error');
+      setDuration(data.duration_ms ?? null);
+    }
+  } catch (err) {
+    setOutput('Connection failed: ' + err.message, 'error');
+    setStatus('Connection error', 'error');
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('asmBtn').addEventListener('click', dumpAsm);
+
+let _showFullAsm = false;
+document.getElementById('asmToggleBtn').addEventListener('click', () => {
+  const d = window._asmData;
+  if (!d || !d.success) return;
+  _showFullAsm = !_showFullAsm;
+  const btn = document.getElementById('asmToggleBtn');
+  if (_showFullAsm) {
+    let note = '';
+    if (d.total_lines && d.user_lines) {
+      note = `\n\n; Full assembly: ${d.total_lines} lines total (user code: ${d.user_lines} lines)`;
+    }
+    setOutput(d.asm_full.trim() + note, 'success');
+    btn.textContent = 'User Code';
+  } else {
+    let note = '';
+    if (d.total_lines && d.user_lines) {
+      note = `\n\n; Showing user code (${d.user_lines} lines). Full assembly: ${d.total_lines} lines total.`;
+    }
+    setOutput(d.asm_user.trim() + note, 'success');
+    btn.textContent = 'Full Assembly';
+  }
+});
+
 document.getElementById('copyBtn').addEventListener('click', () => {
   if (outputEl.style.display !== 'none') {
     navigator.clipboard.writeText(outputEl.textContent);
@@ -803,6 +888,15 @@ document.getElementById('copyBtn').addEventListener('click', () => {
   }
 });
 
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const blob = new Blob([editor.getValue()], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Main.rux';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
 document.getElementById('clearBtn').addEventListener('click', () => {
   if (currentSocket) { currentSocket.close(); currentSocket = null; }
   if (currentTerm) { currentTerm.dispose(); currentTerm = null; currentFit = null; }
@@ -812,6 +906,8 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   showMode('output');
   setStatus('Ready', '');
   setDuration(null);
+  document.getElementById('asmToggleBtn').style.display = 'none';
+  window._asmData = null;
 });
 
 window.addEventListener('resize', () => { if (currentFit) currentFit.fit(); });
